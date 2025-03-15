@@ -1,0 +1,33 @@
+// Update the hooks section in forge.config.js
+hooks: {
+  // Before packaging the app
+  packageAfterPrune: async (forgeConfig, buildPath) => {
+    // Rebuild native modules for the target electron version
+    const { rebuildNativeModules } = require('./build/electron-forge/native-modules');
+    await rebuildNativeModules();
+  },
+
+  // Generate assets (update from previous implementation)
+  generateAssets: async () => {
+    console.log('Generating assets...');
+    // Implementation remains the same
+  },
+
+  // Read package.json during build (update to handle MS build ID if needed)
+  readPackageJson: async (packageJson) => {
+    // Existing implementation
+    if (process.env.VSCODE_QUALITY === 'insiders') {
+      packageJson.name = 'code-insiders';
+      packageJson.description = 'Code - Insiders';
+    }
+
+    // Add MS build ID to version if provided
+    if (process.env.npm_config_ms_build_id) {
+      packageJson.version += `-${process.env.npm_config_ms_build_id}`;
+    }
+
+    return packageJson;
+  },
+
+  // Other hooks remain the same...
+}

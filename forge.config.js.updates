@@ -1,0 +1,25 @@
+const electronConfig = {
+  version: process.env.npm_config_target || '22.3.25',
+  arch: process.env.npm_config_arch || process.arch,
+  platform: process.env.npm_config_platform || process.platform,
+  buildFromSource: process.env.npm_config_build_from_source === 'true',
+  // Use .npmrc disturl or default
+  disturl: process.env.npm_config_disturl || 'https://electronjs.org/headers',
+  // Add ms_build_id if provided
+  msBuildId: process.env.npm_config_ms_build_id || undefined
+};
+
+packagerConfig: {
+  // ...existing config...
+  electronVersion: electronConfig.version,
+  electronSourceDir: electronConfig.buildFromSource ? undefined : electronConfig.disturl,
+  arch: electronConfig.arch === 'armhf' ? 'arm' : electronConfig.arch,
+  download: {
+    mirrorOptions: {
+      mirror: electronConfig.disturl,
+      customDir: electronConfig.msBuildId ? `${electronConfig.version}_${electronConfig.msBuildId}` : undefined,
+    },
+    cacheRoot: path.join(os.homedir(), '.electron'),
+  },
+  // ...rest of existing config...
+},

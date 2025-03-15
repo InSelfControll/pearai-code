@@ -1,0 +1,36 @@
+{
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint --ext .ts,.tsx .",
+
+    "start:dev": "electron-forge start --inspect-electron",
+    "build:dev": "electron-forge package --arch=x64",
+    "build:prod": "electron-forge make",
+
+    "build:windows": "electron-forge make --platform=win32",
+    "build:mac": "electron-forge make --platform=darwin",
+    "build:linux": "electron-forge make --platform=linux",
+
+    "build:alpine": "cross-env npm_config_target_platform=linux npm_config_target_libc=musl electron-forge make --platform=linux --targets=@electron-forge/maker-zip --arch=x64",
+    "build:alpine-arm64": "cross-env npm_config_target_platform=linux npm_config_target_libc=musl electron-forge make --platform=linux --targets=@electron-forge/maker-zip --arch=arm64",
+
+    "test": "mocha --require ts-node/register 'test/**/*.ts'",
+    "watch": "electron-forge start --watch"
+  },
+  "config": {
+    "forge": "./forge.config.js"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-deb": "^7.2.0",
+    "@electron-forge/maker-rpm": "^7.2.0",
+    "@electron-forge/maker-squirrel": "^7.2.0",
+    "@electron-forge/maker-zip": "^7.2.0",
+    "@electron-forge/maker-dmg": "^7.2.0",
+    "@electron-forge/plugin-webpack": "^7.2.0",
+    "cross-env": "^7.0.3"
+  }
+}
