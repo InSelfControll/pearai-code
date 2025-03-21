@@ -30,6 +30,8 @@ import { URI } from "../../../../base/common/uri.js";
 import { ExtensionIdentifier } from "../../../../platform/extensions/common/extensions.js";
 import { IEditorGroupsService } from "../../../../workbench/services/editor/common/editorGroupsService.js";
 import { PEARAI_FIRST_LAUNCH_KEY } from "./common.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+
 
 // const PEARAI_FIRST_LAUNCH_KEY = "pearai.firstLaunch";
 
@@ -93,6 +95,13 @@ export class PearOverlayPart extends Part {
 		if (this.isFirstLaunch) {
 			this.state = "open";
 			this.lock();
+
+			// setting the theme to PearAI Dark on first launch here to avoid flicker
+			this._instantiationService.invokeFunction(accessor => {
+				const configurationService = accessor.get(IConfigurationService);
+					configurationService.updateValue('workbench.colorTheme', "Default PearAI Dark");
+			});
+
 		} else {
 			this.state = "closed";
 		}
@@ -207,6 +216,7 @@ export class PearOverlayPart extends Part {
 		this.element.appendChild(this.popupAreaOverlay);
 
 		if (this.isFirstLaunch) {
+
 			// Create loading overlay with higher z-index and pointer-events handling
 			this.loadingOverlay = $('div.pearai-loading-overlay');
 			this.loadingOverlay.style.position = 'fixed'; // Change to fixed positioning
