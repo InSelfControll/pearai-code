@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { timeout } from '../../../base/common/async.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IEnvironmentMainService } from '../../environment/electron-main/environmentMainService.js';
 import { ILifecycleMainService, LifecycleMainPhase } from '../../lifecycle/electron-main/lifecycleMainService.js';
@@ -13,6 +13,10 @@ import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
 import { IRequestService } from '../../request/common/request.js';
 import { AvailableForDownload, DisablementReason, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
+
+// Configuration key for auto update setting
+const AUTO_UPDATE_KEY = 'pearai.autoUpdate';
+const DEFAULT_AUTO_CHECK_INTERVAL = 30 * 1000; // 60 seconds (1 minute)
 
 export function createUpdateURL(platform: string, quality: string, productService: IProductService): string {
 	let updateURL = `${productService.updateUrl}/update/${platform}/${quality}/${productService.pearAIVersion}`;
@@ -42,6 +46,10 @@ export abstract class AbstractUpdateService implements IUpdateService {
 	private readonly _onStateChange = new Emitter<State>();
 	readonly onStateChange: Event<State> = this._onStateChange.event;
 
+	protected readonly disposables = new DisposableStore();
+	protected autoUpdateEnabled: boolean = false;
+	protected autoUpdateCheckInterval: NodeJS.Timeout | null = null;
+
 	get state(): State {
 		return this._state;
 	}
@@ -62,6 +70,91 @@ export abstract class AbstractUpdateService implements IUpdateService {
 	) {
 		lifecycleMainService.when(LifecycleMainPhase.AfterWindowOpen)
 			.finally(() => this.initialize());
+
+		// Listen for configuration changes
+		this.disposables.add(configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration(AUTO_UPDATE_KEY)) {
+				this.updateAutoUpdateStatus();
+			}
+		}));
+	}
+
+	/**
+	 * Update auto-update status based on configuration
+	 */
+	protected updateAutoUpdateStatus(): void {
+		let autoUpdateEnabled = false;
+
+		try {
+			const settingValue = this.configurationService.getValue<boolean>(AUTO_UPDATE_KEY);
+			autoUpdateEnabled = settingValue === true;
+		} catch (err) {
+			this.logService.error(`Error reading auto-update setting: ${err}`);
+		}
+
+		this.logService.info(`Auto update status: ${autoUpdateEnabled ? 'enabled' : 'disabled'}`);
+		this.setAutoUpdateEnabled(autoUpdateEnabled);
+	}
+
+	/**
+	 * Enable or disable auto-update functionality
+	 */
+	protected setAutoUpdateEnabled(enabled: boolean): void {
+		if (this.autoUpdateEnabled === enabled) {
+			return;
+		}
+
+		this.autoUpdateEnabled = enabled;
+		this.logService.info(`Auto update ${enabled ? 'enabled' : 'disabled'}`);
+
+		if (this.autoUpdateCheckInterval) {
+			clearInterval(this.autoUpdateCheckInterval);
+			this.autoUpdateCheckInterval = null;
+		}
+
+		if (enabled) {
+			this.logService.info(`Setting up auto update check every ${DEFAULT_AUTO_CHECK_INTERVAL / 1000} seconds`);
+			this.autoUpdateCheckInterval = setInterval(() => {
+				this.checkForUpdatesAndNotify();
+			}, DEFAULT_AUTO_CHECK_INTERVAL);
+
+			// Do an initial check
+			this.checkForUpdatesAndNotify();
+		}
+	}
+
+	/**
+	 * Check for updates and notify when updates are available
+	 */
+	protected async checkForUpdatesAndNotify(): Promise<void> {
+		if (!this.autoUpdateEnabled) {
+			return;
+		}
+
+		this.logService.info('Auto update: checking for updates vv');
+
+		const quality = this.productService.quality;
+		if (!quality) {
+			this.logService.info('Auto update: no quality found, skipping update check');
+			return;
+		}
+
+		const newUrl = this.buildUpdateFeedUrl(quality);
+		if (!newUrl) {
+			this.logService.info('Auto update: failed to build update URL, skipping update check');
+			return;
+		}
+
+		if (this.url !== newUrl) {
+			this.url = newUrl;
+			this.logService.info(`Auto update: URL updated to ${this.url}`);
+		}
+
+		try {
+			await this.checkForUpdates(false);
+		} catch (err) {
+			this.logService.error('Auto update check failed:', err);
+		}
 	}
 
 	/**
@@ -112,33 +205,12 @@ export abstract class AbstractUpdateService implements IUpdateService {
 
 		this.setState(State.Idle(this.getUpdateType()));
 
-		if (updateMode === 'manual') {
-			this.logService.info('update#ctor - manual checks only; automatic updates are disabled by user preference');
-			return;
-		}
-
-		if (updateMode === 'start') {
-			this.logService.info('update#ctor - startup checks only; automatic updates are disabled by user preference');
-
-			// Check for updates only once after 30 seconds
-			setTimeout(() => this.checkForUpdates(false), 30 * 1000);
-		} else {
-			// Start checking for updates after 30 seconds
-			this.scheduleCheckForUpdates(30 * 1000).then(undefined, err => this.logService.error(err));
-		}
+		// Initialize auto-update status
+		this.updateAutoUpdateStatus();
 	}
 
 	private getProductQuality(updateMode: string): string | undefined {
 		return updateMode === 'none' ? undefined : this.productService.quality;
-	}
-
-	private scheduleCheckForUpdates(delay = 60 * 60 * 1000): Promise<void> {
-		return timeout(delay)
-			.then(() => this.checkForUpdates(false))
-			.then(() => {
-				// Check again after 1 hour
-				return this.scheduleCheckForUpdates(60 * 60 * 1000);
-			});
 	}
 
 	async checkForUpdates(explicit: boolean): Promise<void> {
@@ -239,4 +311,12 @@ export abstract class AbstractUpdateService implements IUpdateService {
 
 	protected abstract buildUpdateFeedUrl(quality: string): string | undefined;
 	protected abstract doCheckForUpdates(context: any): void;
+
+	dispose(): void {
+		if (this.autoUpdateCheckInterval) {
+			clearInterval(this.autoUpdateCheckInterval);
+			this.autoUpdateCheckInterval = null;
+		}
+		this.disposables.dispose();
+	}
 }
