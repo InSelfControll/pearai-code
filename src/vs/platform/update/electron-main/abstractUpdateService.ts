@@ -16,7 +16,7 @@ import { AvailableForDownload, DisablementReason, IUpdateService, State, StateTy
 
 // Configuration key for auto update setting
 const AUTO_UPDATE_KEY = 'pearai.autoUpdate';
-const DEFAULT_AUTO_CHECK_INTERVAL = 30 * 1000; // 60 seconds (1 minute)
+const DEFAULT_AUTO_CHECK_INTERVAL = 3600 * 1000; // every 1 hour
 
 export function createUpdateURL(platform: string, quality: string, productService: IProductService): string {
 	let updateURL = `${productService.updateUrl}/update/${platform}/${quality}/${productService.pearAIVersion}`;
